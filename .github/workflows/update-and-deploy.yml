@@ -1,9 +1,12 @@
 name: Actualizar datos y publicar
 
+# - Cada día (y con «Run workflow»): descarga datos y precios nuevos, construye y publica (unos 5-25 min).
+# - En cada push de código: reutiliza los últimos datos descargados (caché), construye y publica (1-2 min).
+
 on:
   schedule:
     - cron: '30 10 * * *' # cada día a las 10:30 UTC (la fuente de datos se actualiza hacia las 09:00 UTC)
-  workflow_dispatch: # botón «Run workflow» para lanzarlo a mano
+  workflow_dispatch: # botón «Run workflow» para refrescar los datos a mano
   push:
     branches: [main]
 
@@ -30,17 +33,29 @@ jobs:
 
       - run: npm ci
 
-      # Estadísticas, mazos, matchups y precios en $ (unos 5 minutos)
-      - run: npm run sync
-
-      # Precios en € de Cardmarket. Es incremental: la caché conserva lo ya descargado y solo se piden
-      # las cartas con más de 3 días. La primera vez tarda unos 18 minutos.
+      # Caché de todos los datos descargados. Cada ejecución guarda una versión nueva (clave con el id de ejecución)
+      # y restaura la más reciente. «eur-» recoge la caché antigua de los precios en €.
       - uses: actions/cache@v4
         with:
-          path: public/data/prices-eur.json
-          key: eur-${{ github.run_id }}
-          restore-keys: eur-
-      - run: npm run sync:eur
+          path: public/data
+          key: data-${{ github.run_id }}
+          restore-keys: |
+            data-
+            eur-
+
+      - id: have
+        run: |
+          if [ -f public/data/leaders.json ] && [ -f public/data/cards.json ]; then echo "have=true" >> "$GITHUB_OUTPUT"; else echo "have=false" >> "$GITHUB_OUTPUT"; fi
+
+      # Solo en la ejecución diaria o manual, o si no hay datos guardados todavía.
+      - name: Descargar estadísticas, mazos y precios en $
+        if: github.event_name != 'push' || steps.have.outputs.have != 'true'
+        run: npm run sync
+
+      # Precios en € de Cardmarket: incremental (solo pide las cartas con más de 3 días).
+      - name: Descargar precios en €
+        if: github.event_name != 'push' || steps.have.outputs.have != 'true'
+        run: npm run sync:eur
 
       - run: npm run build
 

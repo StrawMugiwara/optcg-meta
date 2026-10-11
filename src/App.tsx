@@ -94,7 +94,7 @@ export default function App() {
         ) : route[0] === 'discover' ? (
           <Discover leaders={leaders} />
         ) : route[0] === 'matchups' ? (
-          <Matchups leaders={leaders} a={route[1]} b={route[2]} />
+          <Matchups leaders={leaders} cards={cards} a={route[1]} b={route[2]} />
         ) : route[0] === 'builder' ? (
           <Builder leader={leaders.find((l) => l.code === (route[1] || leaders[0].code))} leaders={leaders} cards={cards} deckHash={route[2]} prices={display.prices} />
         ) : route[0] === 'cards' ? (

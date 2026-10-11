@@ -30,7 +30,18 @@ for (const l of leaders.filter((x) => games(x) >= MIN_LEADER_GAMES)) {
         wr: c.winRate, // win rate de los mazos que la llevan
         q: (c.quantities ?? []).map((x) => [x.qty, x.games, x.winRate]),
       }))
-    await writeFile(new URL(`${l.code}.json`, OUT), JSON.stringify({ games: j.leaderStats?.games ?? 0, wr: j.leaderStats?.winRate ?? 0, cards }))
+    // «tech»: cartas que suben o bajan el win rate contra un líder rival concreto (por código de líder rival)
+    const tech = Object.fromEntries(
+      Object.entries(j.tech ?? {}).flatMap(([opp, list]) => {
+        const items = list
+          .filter((t) => t.gamesWith >= 150)
+          .sort((a, b) => Math.abs(b.lift) - Math.abs(a.lift))
+          .slice(0, 12)
+          .map((t) => ({ id: t.id, lift: t.lift, with: t.winRateWith, without: t.winRateWithout, n: t.gamesWith }))
+        return items.length ? [[opp, items]] : []
+      }),
+    )
+    await writeFile(new URL(`${l.code}.json`, OUT), JSON.stringify({ games: j.leaderStats?.games ?? 0, wr: j.leaderStats?.winRate ?? 0, cards, tech }))
     console.log(`ok  ${l.code} ${l.name} (${cards.length} cartas)`)
   } catch (e) {
     console.warn(`ERR ${l.code}: ${e.message}`)

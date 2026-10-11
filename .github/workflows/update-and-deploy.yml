@@ -1,0 +1,59 @@
+name: Actualizar datos y publicar
+
+on:
+  schedule:
+    - cron: '30 10 * * *' # cada día a las 10:30 UTC (la fuente de datos se actualiza hacia las 09:00 UTC)
+  workflow_dispatch: # botón «Run workflow» para lanzarlo a mano
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Estadísticas, mazos, matchups y precios en $ (unos 5 minutos)
+      - run: npm run sync
+
+      # Precios en € de Cardmarket. Es incremental: la caché conserva lo ya descargado y solo se piden
+      # las cartas con más de 3 días. La primera vez tarda unos 18 minutos.
+      - uses: actions/cache@v4
+        with:
+          path: public/data/prices-eur.json
+          key: eur-${{ github.run_id }}
+          restore-keys: eur-
+      - run: npm run sync:eur
+
+      - run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

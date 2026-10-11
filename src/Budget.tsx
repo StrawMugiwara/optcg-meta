@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { missing, useCollection } from './collection'
 import { deckPrice, fetchJson, getFx, money, wilson, type Deck, type Leader } from './types'
 
 type Row = {
@@ -30,6 +31,9 @@ export default function Budget({ leaders, prices }: { leaders: Leader[]; prices:
   const [minGames, setMinGames] = useState(150)
   const [onlyFrontier, setOnlyFrontier] = useState(false)
   const [full, setFull] = useState(true) // solo mazos con todos los precios conocidos
+  const [onlyMissing, setOnlyMissing] = useState(false) // precio = solo lo que me falta según mi colección
+  const owned = useCollection()
+  const hasCollection = Object.keys(owned).length > 0
   const maxBudget = getFx().cur === 'EUR' ? 600 : 700
 
   const withDecks = useMemo(() => leaders.filter((l) => games(l) >= 200), [leaders])
@@ -51,11 +55,13 @@ export default function Budget({ leaders, prices }: { leaders: Leader[]; prices:
         (decks[l.code] ?? []).flatMap((d) => {
           const rec = record(d)
           if (!rec) return []
-          const { total, unknown } = deckPrice([...d.cards, { id: l.code, qty: 1 }], prices)
+          const whole = [...d.cards, { id: l.code, qty: 1 }]
+          const items = onlyMissing ? missing(whole, owned).map((m) => ({ id: m.id, qty: m.need })) : whole
+          const { total, unknown } = deckPrice(items, prices)
           return [{ l, deck: d, price: total, unknown, n: rec.n, wr: rec.wr, lo: wilson(rec.wins, rec.n).lo }]
         }),
       ),
-    [withDecks, decks, prices],
+    [withDecks, decks, prices, onlyMissing, owned],
   )
 
   // Frontera de Pareto: ningún otro mazo es a la vez más barato y mejor (por límite inferior).
@@ -94,6 +100,9 @@ export default function Budget({ leaders, prices }: { leaders: Leader[]; prices:
           </select>
         </label>
         <label className="chk"><input type="checkbox" checked={full} onChange={(e) => setFull(e.target.checked)} /> Solo con precio completo</label>
+        <label className="chk" title={hasCollection ? 'El precio pasa a ser solo el de las cartas que aún no tienes' : 'Guarda antes tu colección en «Mi colección»'}>
+          <input type="checkbox" checked={onlyMissing} disabled={!hasCollection} onChange={(e) => setOnlyMissing(e.target.checked)} /> Contar solo lo que me falta
+        </label>
         <label className="chk"><input type="checkbox" checked={onlyFrontier} onChange={(e) => setOnlyFrontier(e.target.checked)} /> Solo «mejor relación»</label>
         <span className="muted">{loading ? 'Cargando mazos…' : `${rows.length} mazos`}</span>
       </div>

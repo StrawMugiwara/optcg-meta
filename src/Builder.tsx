@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import CardmarketExport from './CardmarketExport'
+import MissingBar from './MissingBar'
 import { deckRecord, SMALL_SAMPLE } from './diff'
 import { deckPrice, fetchJson, usd, type Card, type Deck, type Leader } from './types'
 
@@ -117,6 +118,7 @@ export default function Builder({ leader, leaders, cards, deckHash, prices }: { 
         <button onClick={copy}>{copied ? '¡Copiado!' : 'Copiar lista'}</button>
         <CardmarketExport leader={leader.code} cards={list.map((c) => ({ id: c.id, qty: c.qty }))} db={cards} />
       </div>
+      <MissingBar leader={leader.code} cards={list.map((c) => ({ id: c.id, qty: c.qty }))} db={cards} prices={prices} />
       <div className="curve" title="Curva de coste">
         {curve.map((n, i) => (
           <div key={i}><i style={{ height: `${(n / maxCurve) * 100}%` }} /><span>{i === 10 ? '10+' : i}</span><em>{n || ''}</em></div>

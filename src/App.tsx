@@ -6,9 +6,10 @@ import Discover from './Discover'
 import Budget from './Budget'
 import CardPreview from './CardPreview'
 import CardAnalysis from './CardAnalysis'
-import CardmarketExport from './CardmarketExport'
-import { deckDiff, deckRecord, SMALL_SAMPLE } from './diff'
-import { buildPrices, deckPrice, fetchJson, getFx, setExactEur, setFx, usd, wilson, type EurPrices, type Card, type Deck, type Leader, type Meta, type Prices } from './types'
+import CollectionPage from './MyCollection'
+import DeckPanel from './DeckPanel'
+import { deckRecord, SMALL_SAMPLE } from './diff'
+import { buildPrices, deckPrice, fetchJson, getFx, setExactEur, setFx, usd, type EurPrices, type Card, type Deck, type Leader, type Meta, type Prices } from './types'
 
 const fmtDate = (iso: string) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '')
 const daysOld = (iso: string) => (iso ? Math.floor((Date.now() - Date.parse(iso.slice(0, 10))) / 864e5) : 0)
@@ -64,6 +65,7 @@ export default function App() {
           <a href="#/discover" className={route[0] === 'discover' ? 'on' : ''}>Descubre</a>
           <a href="#/matchups" className={route[0] === 'matchups' ? 'on' : ''}>Matchups</a>
           <a href="#/builder" className={route[0] === 'builder' ? 'on' : ''}>Constructor</a>
+          <a href="#/collection" className={route[0] === 'collection' ? 'on' : ''}>Mi colección</a>
           <a href="#/cards" className={route[0] === 'cards' ? 'on' : ''}>Cartas</a>
         </nav>
         <span className="fx" title="Precios en € de Cardmarket. Solo se usa para las pocas cartas sin precio en Cardmarket (€ por cada $).">
@@ -93,6 +95,8 @@ export default function App() {
           <Budget leaders={leaders} prices={display.prices} />
         ) : route[0] === 'discover' ? (
           <Discover leaders={leaders} />
+        ) : route[0] === 'collection' ? (
+          <CollectionPage cards={cards} prices={display.prices} />
         ) : route[0] === 'matchups' ? (
           <Matchups leaders={leaders} cards={cards} a={route[1]} b={route[2]} />
         ) : route[0] === 'builder' ? (
@@ -204,7 +208,7 @@ function LeaderPage({ leader, leaders, cards, prices, deckHash }: { leader?: Lea
               </button>
             ))}
           </div>
-          {deck && <DeckView deck={deck} base={raw?.[0]} cards={cards} leader={leader.code} prices={prices} />}
+          {deck && <DeckPanel deck={deck} base={raw?.[0]} cards={cards} leader={leader.code} prices={prices} />}
         </>
       )}
 
@@ -229,61 +233,6 @@ function MuList({ title, from, rows }: { title: string; from: string; rows: { c:
           <b className={m.winRate >= 50 ? 'good' : 'bad'}>{m.winRate}%</b><small>{m.games}p</small>
         </a>
       ))}
-    </div>
-  )
-}
-
-function DeckView({ deck, base, cards, leader, prices }: { deck: Deck; base?: Deck; cards: Record<string, Card>; leader: string; prices: Record<string, number> }) {
-  const diff = base && base.hash !== deck.hash ? deckDiff(base, deck, cards) : null
-  const rec = deckRecord(deck)
-  const cost = deckPrice([...deck.cards, { id: leader, qty: 1 }], prices)
-  const list = deck.cards
-    .map((c) => ({ ...c, card: cards[c.id] }))
-    .sort((a, b) => Number(a.card?.cost ?? 0) - Number(b.card?.cost ?? 0) || a.id.localeCompare(b.id))
-  const total = list.reduce((n, c) => n + c.qty, 0)
-  const src = deck.sources
-  const copy = () => navigator.clipboard?.writeText(deck.cards.map((c) => `${c.qty}x${c.id}`).join('\n'))
-  return (
-    <div className="deck">
-      <p className="muted">
-        {total} cartas (+ líder, incluido en el precio) · <b>{usd(cost.total)}</b>{cost.unknown > 0 && ` (parcial: ${cost.unknown} sin precio)`}
-        {` · ${rec.src} ${rec.wr}% (${rec.n}p)`}
-        {src.kaizokuPlayed && rec.src !== 'Kaizoku' && ` · Kaizoku ${src.kaizokuPlayed.winRate}%`}
-        {src.optcgone && ` · optcg.one ${src.optcgone.winRate}% (${src.optcgone.games}p)`}
-        {' '}<button onClick={copy}>Copiar lista</button>{' '}
-        <a className="btn" href={`#/builder/${leader}/${deck.hash}`}>Editar en el constructor</a>{' '}
-        <CardmarketExport leader={leader} cards={deck.cards} db={cards} />
-      </p>
-      {cost.approx > 0 && <p className="muted">~ {cost.approx} cartas con precio convertido desde $ (sin dato de Cardmarket).</p>}
-      {rec.n > 0 && (() => {
-        const w = wilson(Math.round((rec.wr / 100) * rec.n), rec.n)
-        return (
-          <p className={rec.n < SMALL_SAMPLE ? 'warnbox' : 'muted'}>
-            {rec.n < SMALL_SAMPLE && '⚠ Muestra pequeña. '}
-            Con {rec.n} partidas, el win rate real está probablemente entre <b>{w.lo.toFixed(0)}%</b> y <b>{w.hi.toFixed(0)}%</b>:
-            diferencias de unos pocos puntos entre variantes suelen ser ruido.
-          </p>
-        )
-      })()}
-      {diff && (
-        <div className="diff">
-          <b>Qué cambia respecto a la variante más jugada</b>{' '}
-          <span className="muted">({diff.shared}/50 cartas en común)</span>
-          {diff.added.length + diff.removed.length === 0 && <p className="muted">Mismas cartas con distinto reparto de copias.</p>}
-          <div className="diff-cols">
-            <div>{diff.added.map((c) => <div key={c.id} className="good hov" data-card={c.id}>+{c.qty} {c.name}</div>)}</div>
-            <div>{diff.removed.map((c) => <div key={c.id} className="bad hov" data-card={c.id}>−{c.qty} {c.name}</div>)}</div>
-          </div>
-        </div>
-      )}
-      <div className="grid">
-        {list.map((c) => (
-          <figure key={c.id} title={c.card?.name}>
-            {c.card ? <img src={c.card.img} alt={c.card.name} loading="lazy" /> : <div className="ph">{c.id}</div>}
-            <figcaption>×{c.qty}{c.id in prices && <small>{usd(prices[c.id])}</small>}</figcaption>
-          </figure>
-        ))}
-      </div>
     </div>
   )
 }
